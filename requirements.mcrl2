@@ -13,8 +13,16 @@
 % 5. (personDetected(main, true) implies tetheredConnected(true)) must be true to execute setPressure(main, depressurized).
 [true*].personDetected(main, true).[(!personDetected(main, false))*].[tetheredConnected(true)].[(!personDetected(main, false) && !tetheredConnected(false))*].[setPressure(main, depressurized)]
 
-% 6. personDetected(backup, false) must be true to execute setPressure(backup, depressurize).
-[true*. personDetected(backup, false)]<(!personDetected(backup, true))*. setPressure(backup, unpressurized)>true
+% 6. personDetected(backup, false) must be true to execute setPressure(backup, depressurize). (WEIRD DEADLOCK)
+%[true*. personDetected(backup, false)]<(!personDetected(backup, true))*. setPressure(backup, unpressurized)>true
+[true*. personDetected(backup, true)]<!personDetected(backup, false)*.setPressure(backup, unpressurized)>false
+
+nu X(p:Bool=false).(
+    [personDetected(backup, true)]X(true) &&
+    [personDetected(backup, false)]X(false) &&
+    [setPressure(backup, unpressurized)]val(!p) &&
+    <true>true
+)
 
 % 7. If spacecraftDocked(b) is received then execute updateDashboard(docked, b). (TRUE)
 forall b: Bool.
@@ -68,18 +76,26 @@ forall b:Bool.
         [doorState(middle,unlock)]X(lockL, unlock) &&
         [personDetected(main, b)]val(is_unlock(lockL) || is_unlock(lockR)) &&
         <true>true)
+        
+    nu X(out:DoorStatus=lock,mid:DoorStatus=lock,inn:DoorStatus=lock).(
+        [doorState(outer, lock)]X(lock, mid, inn) &&
+        [doorState(outer, unlock)]X(unlock, mid, inn) &&
+        [doorState(middle, lock)]X(out, lock, inn) &&
+        [doorState(middle, unlock)]X(out, unlock, inn) &&
+        [doorState(inner, lock)]X(out, mid, lock) &&
+        [doorState(inner, unlock)]X(out, mid, unlock) &&
+        [personDetected(backup, b)]val(is_unlock())
+    )
 
 % 15. tetherConnected(true) is not possible if personDetected(main, false)
 
 
-forall n: Name, p: PhoneNumber . forall b: PhoneBook .
-  [true* . addPhone(n,p) .
-     !(delPhone(n) || exists q: PhoneNumber . changePhone(n, q))* .
-     findPhone(n) .
-     !(delPhone(n) || exists q: PhoneNumber . changePhone(n, q))*]
-     [getPhoneBook(b)] val(b(n) == p)
+%forall n: Name, p: PhoneNumber . forall b: PhoneBook .
+%  [true* . addPhone(n,p) .
+%     !(delPhone(n) || exists q: PhoneNumber . changePhone(n, q))* .
+%     findPhone(n) .
+%     !(delPhone(n) || exists q: PhoneNumber . changePhone(n, q))*]
+%     [getPhoneBook(b)] val(b(n) == p)
 
-     
-
-        mu X(n:Nat=0) . (val(n <  (N - 1) + (N - 2)) && <!all_done> X(n+1))
-             || (val(n == (N - 1) + (N - 2)) && <all_done> true)
+%        mu X(n:Nat=0) . (val(n <  (N - 1) + (N - 2)) && <!all_done> X(n+1))
+%             || (val(n == (N - 1) + (N - 2)) && <all_done> true)

@@ -83,8 +83,8 @@ proc DoorController(out:DoorStatus, mid:DoorStatus, inn:DoorStatus)
 + receivePressureEqualized(outer, true). unlockDoor(outer).sendRequestCompleted.DoorController(out = unlock)
 
 + sum d:Door. receivePressureEqualized(d, false). sendRequestCompleted. DoorController()
-% Door status from doors                                  vvvvvvvvvvvvvvvvvvvv
-+ (out != noreply) -> doorState(outer, noreply).sendDoorState(outer, noreply).sendRequestCompleted. DoorController(out = noreply) %might still get stuck here
+% Door status from doors
++ (out != noreply) -> doorState(outer, noreply).sendDoorState(outer, noreply).sendRequestCompleted. DoorController(out = noreply)
 
 + (inn == unlock) -> doorState(inner, lock).DoorController(inn = lock)
 + (mid == unlock) -> doorState(middle, lock).DoorController(mid = lock)
@@ -100,13 +100,13 @@ sum d:Door. (
     (receiveEqualize(d, lock) + receiveEqualize(d, unlock)). (
         (getLeftEnv(d) == getRightEnv(d)) -> sendPressureEquilized(d, true). PressureController(dr = d, dockingChanges = false)
         %from backup into station (always pressurize backup)
-        + (is_backupAirlock(getLeftEnv(d)) && is_station(getRightEnv(d))) -> setPressure(backup, pressurized). PressureController(pB = pressurized, dr = d, dockingChanges = false)
+        + (is_backupAirlock(getLeftEnv(d)) && is_station(getRightEnv(d))) -> setPressure(backup, pressurized). sendPressureEquilized(d, true).  PressureController(pB = pressurized, dr = d, dockingChanges = false)
         %from docked spaceship into main (always pressurize main)
-        + (is_space(getLeftEnv(d)) && pO==pressurized) -> setPressure(main, pressurized). PressureController(pM = pressurized, dr = d, dockingChanges = false)
+        + (is_space(getLeftEnv(d)) && pO==pressurized) -> setPressure(main, pressurized). sendPressureEquilized(d, true).  PressureController(pM = pressurized, dr = d, dockingChanges = false)
         %from main into vacuum (depressurize main, after safety check)
         + (is_space(getLeftEnv(d)) && pO==unpressurized) -> sendCheckDepressurizeConditions(main). PressureController(pM = pressurized, dr = d, dockingChanges = false)
         % between backup-main
-        + (is_mainAirlock(getLeftEnv(d)) && pM == unpressurized) -> setPressure(main, pressurized) .PressureController(pM = pressurized, dr = d, dockingChanges = false)
+        + (is_mainAirlock(getLeftEnv(d)) && pM == unpressurized) -> setPressure(main, pressurized). sendPressureEquilized(d, true). PressureController(pM = pressurized, dr = d, dockingChanges = false)
 
     )
     % error case
