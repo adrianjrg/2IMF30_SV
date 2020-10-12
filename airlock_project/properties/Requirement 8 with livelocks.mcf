@@ -1,0 +1,2 @@
+forall airL:Airlock.
+    [true*.personDetected(airL, true).!updateDashboard(inUse, true)]<true*.updateDashboard(inUse, true)>true

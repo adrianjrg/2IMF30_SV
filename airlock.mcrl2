@@ -142,6 +142,6 @@ init
       sendRequestCompleted | receiveRequestCompleted -> requestCompleted % i just added this
     },
     MainController(false, false, false, ready) || DoorController(lock, lock, lock) || PressureController(unpressurized, pressurized, pressurized, pressurized, inner) || SafetyController(false, false, false)
-    || MainController(false, false, false, ready) || DoorController(lock, lock, lock) || PressureController(unpressurized, pressurized, pressurized, pressurized, inner) || SafetyController(false, false, false)
+    %|| MainController(false, false, false, ready) || DoorController(lock, lock, lock) || PressureController(unpressurized, pressurized, pressurized, pressurized, inner) || SafetyController(false, false, false)
 ) ) ;
 % init DoorController(lock, lock, lock);

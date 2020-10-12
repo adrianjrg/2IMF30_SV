@@ -2,5 +2,10 @@
  <spec>airlock_project_spec.mcrl2</spec>
  <properties>
   <property>No deadlocks</property>
+  <property>Requirement 8</property>
+  <property>Requirement 8 with livelocks</property>
+  <property>R8 part 3</property>
+  <property>R6</property>
+  <property>Anti teleportation</property>
  </properties>
 </root>

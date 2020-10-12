@@ -17,7 +17,6 @@ act setPressure: Airlock # Pressure;
     personDetected: Airlock # Bool;
     updateDashboard: DashboardStatus # Bool;
     buttonPressed: Button;
-    requestAccess: Door;
 
 
 % NOT SAFE FOR WORK
@@ -51,85 +50,105 @@ act sendAirlockInUse, receiveAirlockInUse, airlockInUse: Bool; % mapped to perso
     sendPressureEquilized, receivePressureEqualized, internalPressureEqualized: Door # Bool;
     sendCheckDepressurizeConditions, receiveCheckDepressurizeConditions, checkDepressurizeConditions: Airlock;
     sendConditionsSatisfied, receiveConditionsSatisfied, internalConditionsSatisfied: Airlock # Bool;
+    sendDoorChange, receiveDoorChange, internalDoorChange: Door # DoorStatus; 
 
 % Main controller logic
 % sends:updateDashboard/requestAccess/updateSpacecraftDocked
 % receives:buttons/docking/inUse/doorState
-proc MainController(u:Bool, a:Bool, d:Bool, mode:ControllerMode)
-= sum b:Button. (mode == ready) -> buttonPressed(b).sendRequestAccess(buttonToDoor(b)).MainController(u, a, d, processing)
-+ receiveRequestCompleted. MainController(u, a, d, ready)  
-+ sum cond:Bool. spacecraftDocked(cond). updateDashboard(docked, cond). sendDockingStatus(cond).MainController(u, a, cond, mode)
-+ sum cond:Bool. receiveAirlockInUse(cond). updateDashboard(inUse, cond). MainController(cond, a, d, mode)
-+ receiveDoorState(outer, noreply). (updateDashboard(alarm, true).MainController(u, true, d, mode))
-+ receiveDoorState(outer, lock). (updateDashboard(alarm, false).MainController(u, false, d, mode))
-+ receiveDoorState(outer, unlock). (updateDashboard(alarm, false).MainController(u, false, d, mode));
+proc MainController(u:Bool, a:Bool, d:Bool, mode:ControllerMode, currentButton:Button, sent:Bool)
+= (mode == ready) -> sum b:Button. (b != bDashboard) -> buttonPressed(b). MainController(mode = processing, currentButton = b, sent = true)
+                                                     <> (
+                                        (d) -> buttonPressed(bDashboard). MainController(mode = processing, currentButton = b, sent = true)
+                                    )
+                 <> ((sent) -> sendRequestAccess(buttonToDoor(currentButton)).MainController(sent = false)
+                     + receiveRequestCompleted.MainController(mode = ready)
+                     )
+% + sum cond:Bool. spacecraftDocked(cond). updateDashboard(docked, cond). sendDockingStatus(cond).MainController(u, a, cond, mode, currentButton)
++ sum cond:Bool. receiveAirlockInUse(cond). updateDashboard(inUse, cond). MainController(u = cond)
++ receiveDoorState(outer, noreply). updateDashboard(alarm, true).MainController(a = true) 
++ receiveDoorState(outer, lock). updateDashboard(alarm, false).MainController(a = false)
++ receiveDoorState(outer, unlock). updateDashboard(alarm, false).MainController(a = false)
++ sum cond:Bool. receiveDockingStatus(cond). updateDashboard(docked, cond). MainController(d = cond);
 
 % Door controller
 % sends:unlockDoor/sendDoorState/equalize/requestComplete
 % receives:doorState/requestAccess/pressureEqualized
-proc DoorController(out:DoorStatus, mid:DoorStatus, inn:DoorStatus)
-= receiveRequestAccess(outer). (out != unlock && mid == lock) -> (sendEqualize(outer, out).DoorController(out, mid, inn))
-+ receiveRequestAccess(middle). (out != unlock && mid == lock && inn == lock) -> sendEqualize(middle, out).DoorController(out, mid, inn)
-+ receiveRequestAccess(inner). (mid == lock && inn == lock) -> sendEqualize(inner, out).DoorController(out, mid, inn)
+proc DoorController(out:DoorStatus, mid:DoorStatus, inn:DoorStatus, doorFail: Bool)
+= receiveRequestAccess(outer). (out == lock && mid == lock) -> (sendEqualize(outer, out).DoorController())
++ receiveRequestAccess(outer). (out == noreply) -> (sendRequestCompleted. DoorController())
++ receiveRequestAccess(middle). (out != unlock && mid == lock && inn == lock) -> sendEqualize(middle, out).DoorController()
++ receiveRequestAccess(inner). (mid == lock && inn == lock) -> sendEqualize(inner, out).DoorController()
 
-+ receivePressureEqualized(inner, true). unlockDoor(inner).sendRequestCompleted.DoorController(out, mid, unlock)
-+ receivePressureEqualized(middle, true). unlockDoor(middle).sendRequestCompleted.DoorController(out, unlock, inn)
-+ receivePressureEqualized(outer, true). unlockDoor(outer).sendRequestCompleted.DoorController(unlock, mid, inn)
++ receivePressureEqualized(inner, true). unlockDoor(inner).sendDoorChange(inner, unlock).sendRequestCompleted.DoorController()
++ receivePressureEqualized(middle, true). unlockDoor(middle).sendDoorChange(middle, unlock).sendRequestCompleted.DoorController()
++ (receivePressureEqualized(outer, true). ((!doorFail) -> unlockDoor(outer).sendDoorChange(outer, unlock).sendRequestCompleted.DoorController(out = unlock)
+                                          + (doorFail) -> doorState(outer, noreply).sendDoorChange(outer, noreply).DoorController(out = noreply))
 
-+ sum d:Door. receivePressureEqualized(d, false). sendRequestCompleted. DoorController(out, mid, inn)
++ sum d:Door. receivePressureEqualized(d, false). sendRequestCompleted. DoorController()
 % Door status from doors                                  vvvvvvvvvvvvvvvvvvvv
-+ doorState(outer, noreply).sendDoorState(outer, noreply).sendRequestCompleted. DoorController(noreply, mid, inn)
++ (out != noreply) -> doorState(outer, noreply).sendDoorChange(outer, noreply).sendDoorState(outer, noreply).sendRequestCompleted. DoorController(out = noreply) %might still get stuck here
 
-+ (out == unlock) -> doorState(inner, lock).DoorController(lock, mid, inn)
-+ (out == unlock) -> doorState(middle, lock).DoorController(out, lock, inn)
-+ (out == unlock) -> doorState(outer, lock). DoorController(out, mid, lock);
++ (inn == unlock) -> doorState(inner, lock).sendDoorChange(inner, lock).DoorController(inn = lock) %now check closed airlocks
++ (mid == unlock) -> doorState(middle, lock).sendDoorChange(middle, lock).DoorController(mid = lock)
++ (out == unlock) -> doorState(outer, lock).sendDoorChange(outer, lock). DoorController(out = lock);
++ sum b: Bool. doorFailChance(b).DoorController(doorFail = b)
 
 %sends:setPressure, sendCheckDepressurizedConditions,sendPressureEquilized   
 %receive: receiveConditionsSatisfied, receiveEquilize
-
-proc PressureController(pO:Pressure, pM:Pressure, pB:Pressure, pS:Pressure, dr:Door)
-= receiveDockingStatus(true).PressureController(pressurized, pM, pB, pS, dr)
-+ receiveDockingStatus(false).PressureController(unpressurized, pM, pB, pS, dr)
-+ sum d:Door. (
+proc PressureController(pO:Pressure, pM:Pressure, pB:Pressure, pS:Pressure, dr:Door, dockingChanges:Bool, currentlyDocked:Bool) =
+% = receiveDockingStatus(true).PressureController(pressurized, pM, pB, pS, dr)
+% + receiveDockingStatus(false).PressureController(unpressurized, pM, pB, pS, dr)
+sum d:Door. (
     %default
     (receiveEqualize(d, lock) + receiveEqualize(d, unlock)). (
-        (getLeftEnv(d) == getRightEnv(d)) -> sendPressureEquilized(d, true). PressureController(pO, pM, pB, pS, d)
+        (getLeftEnv(d) == getRightEnv(d)) -> sendPressureEquilized(d, true). PressureController(dr = d, dockingChanges = false)
         %from backup into station (always pressurize backup)
-        + (is_backupAirlock(getLeftEnv(d)) && is_station(getRightEnv(d))) -> setPressure(backup, pressurized). PressureController(pO, pM, pressurized, pS, d)
+        + (is_backupAirlock(getLeftEnv(d)) && is_station(getRightEnv(d))) -> setPressure(backup, pressurized). PressureController(pB = pressurized, dr = d, dockingChanges = false)
         %from docked spaceship into main (always pressurize main)
-        + (is_space(getLeftEnv(d)) && pO==pressurized) -> setPressure(main, pressurized). PressureController(pO, pressurized, pB, pS, d)
+        + (is_space(getLeftEnv(d)) && pO==pressurized) -> setPressure(main, pressurized). PressureController(pM = pressurized, dr = d, dockingChanges = false)
         %from main into vacuum (depressurize main, after safety check)
-        + (is_space(getLeftEnv(d)) && pO==unpressurized) -> sendCheckDepressurizeConditions(main). PressureController(pO, pressurized, pB, pS, d)
+        + (is_space(getLeftEnv(d)) && pO==unpressurized) -> sendCheckDepressurizeConditions(main). PressureController(pM = pressurized, dr = d, dockingChanges = false)
         % between backup-main
-        + (is_mainAirlock(getLeftEnv(d)) && pM == unpressurized) -> setPressure(main, pressurized) .PressureController(pO, pressurized, pB, pS, d)
+        + (is_mainAirlock(getLeftEnv(d)) && pM == unpressurized) -> setPressure(main, pressurized) .PressureController(pM = pressurized, dr = d, dockingChanges = false)
 
     )
     % error case
     + receiveEqualize(d, noreply). (
-    (is_mainAirlock(getLeftEnv(d)) && pM == unpressurized) -> sendCheckDepressurizeConditions(backup) .PressureController(pO, pM, unpressurized, pS, d)
-    + (is_mainAirlock(getLeftEnv(d)) && pM == pressurized) -> sendPressureEquilized(d, false) .PressureController(pO, pM, unpressurized, pS, d)
+    (is_mainAirlock(getLeftEnv(d)) && pM == unpressurized) -> sendCheckDepressurizeConditions(backup) .PressureController(pB = unpressurized, dr = d, dockingChanges = false)
+    + (is_mainAirlock(getLeftEnv(d)) && pM == pressurized) -> sendPressureEquilized(d, false) .PressureController(pB = unpressurized, dr = d, dockingChanges = false)
+    
+    + (is_backupAirlock(getLeftEnv(d)) && pB == pressurized) -> sendPressureEquilized(d, true && !dockingChanges) .PressureController(pB = pressurized, dr = d, dockingChanges = false)
+    + (is_backupAirlock(getLeftEnv(d)) && pB == unpressurized) -> setPressure(backup, pressurized). sendPressureEquilized(d, true && !dockingChanges) .PressureController(pB = pressurized, dr = d, dockingChanges = false)
     )
 )
-+ sum airL:Airlock. receiveConditionsSatisfied(airL, true). setPressure(airL, unpressurized). sendPressureEquilized(dr, true). PressureController(pO, pM, pB, pS, dr)
-+ sum airL:Airlock. receiveConditionsSatisfied(airL, false). sendPressureEquilized(dr, false). PressureController(pO, pM, pB, pS, dr);
++ sum airL:Airlock. receiveConditionsSatisfied(airL, true). setPressure(airL, unpressurized). sendPressureEquilized(dr, true && !dockingChanges). PressureController()
++ sum airL:Airlock. receiveConditionsSatisfied(airL, false). sendPressureEquilized(dr, false). PressureController()
++ (!currentlyDocked) -> spacecraftDocked(true). sendDockingStatus(true). PressureController(pO = pressurized, dockingChanges = true, currentlyDocked = true)
++ (currentlyDocked) -> spacecraftDocked(false). sendDockingStatus(false). PressureController(pO = unpressurized, dockingChanges = true, currentlyDocked = false);
 
 %sends: sendInUse, sendConditionsSatisfied  receive: personDetected, tetherConnected
-proc SafetyController(perMain:Bool, perBack:Bool, tether:Bool)
+proc SafetyController(perMain:Bool, perBack:Bool, tether:Bool, statOuter, statMiddle, statInner : DoorStatus)
 = sum airL: Airlock. (
-    ( is_main(airL) -> sum b:Bool. personDetected(airL, b). sendAirlockInUse(b || perBack). SafetyController(b, perBack, tether) )
-    + ( is_backup(airL) -> sum b:Bool. personDetected(airL, b). sendAirlockInUse(perMain || b). SafetyController(perMain, b, tether) ) 
+    ( is_main(airL) -> sum b:Bool. (perMain != b && ( statOuter == unlock || statMiddle == unlock ) ) -> personDetected(airL, b). sendAirlockInUse(b || perBack). SafetyController(perMain = b) )
+    + ( is_backup(airL) -> sum b:Bool. (perBack != b && (statMiddle == unlock || statInner == unlock)) -> personDetected(airL, b). sendAirlockInUse(perMain || b). SafetyController(perBack = b) ) 
 )
-+ sum b:Bool. tetherConnected(b). SafetyController(perMain, perBack, b)
-+ receiveCheckDepressurizeConditions(main). sendConditionsSatisfied(main, tether || !perMain).SafetyController(perMain, perBack, tether)
-+ receiveCheckDepressurizeConditions(backup). sendConditionsSatisfied(backup, !perBack).SafetyController(perMain, perBack, tether);
+%+ sum b:Bool. (tether != b) -> tetherConnected(b). SafetyController(tether = b)
++ (perMain) -> ( sum b:Bool. (tether != b) -> tetherConnected(b). SafetyController(tether = b) )
++ receiveCheckDepressurizeConditions(main). sendConditionsSatisfied(main, tether || !perMain).SafetyController()
++ receiveCheckDepressurizeConditions(backup). sendConditionsSatisfied(backup, !perBack).SafetyController()
++ sum d:DoorStatus. (
+    receiveDoorChange(outer, d). SafetyController(statOuter = d)
+    + receiveDoorChange(middle, d). SafetyController(statMiddle = d)
+    + receiveDoorChange(inner, d). SafetyController(statInner = d)
+);
 
 init
   allow(
     { airlockInUse, internalDoorState, internalRequestAccess, 
-      internalEqualize, internalPressureEqualized, 
+      internalEqualize, internalPressureEqualized, internalDoorChange,
       checkDepressurizeConditions, internalConditionsSatisfied, internalDockingStatus,
       setPressure, doorState, unlockDoor, tetherConnected, spacecraftDocked, personDetected,
-      updateDashboard, buttonPressed, requestAccess, requestCompleted},
+      updateDashboard, buttonPressed, requestCompleted},
     comm(
     { sendAirlockInUse | receiveAirlockInUse -> airlockInUse,
       sendDoorState | receiveDoorState -> internalDoorState,
@@ -139,9 +158,10 @@ init
       sendPressureEquilized | receivePressureEqualized -> internalPressureEqualized,
       sendCheckDepressurizeConditions | receiveCheckDepressurizeConditions -> checkDepressurizeConditions,
       sendConditionsSatisfied | receiveConditionsSatisfied -> internalConditionsSatisfied,
-      sendRequestCompleted | receiveRequestCompleted -> requestCompleted % i just added this
+      sendRequestCompleted | receiveRequestCompleted -> requestCompleted,
+      sendDoorChange | receiveDoorChange -> internalDoorChange
     },
-    MainController(false, false, false, ready) || DoorController(lock, lock, lock) || PressureController(unpressurized, pressurized, pressurized, pressurized, inner) || SafetyController(false, false, false)
-    || MainController(false, false, false, ready) || DoorController(lock, lock, lock) || PressureController(unpressurized, pressurized, pressurized, pressurized, inner) || SafetyController(false, false, false)
-) ) ;
+    MainController(false, false, false, ready, bOuter, false) || DoorController(lock, lock, lock) || PressureController(unpressurized, pressurized, pressurized, pressurized, inner, false, false) || SafetyController(false, false, false, lock, lock, lock)
+    %|| MainController(false, false, false, ready) || DoorController(lock, lock, lock) || PressureController(unpressurized, pressurized, pressurized, pressurized, inner) || SafetyController(false, false, false)
+ ) );
 % init DoorController(lock, lock, lock);

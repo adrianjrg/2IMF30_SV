@@ -1,0 +1,2 @@
+forall airL:Airlock. 
+    [true*.personDetected(airL, true)] mu X.([!updateDashboard(inUse, true)]X && <true>true)
