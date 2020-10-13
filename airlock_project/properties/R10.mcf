@@ -1,0 +1,13 @@
+forall pres:Pressure.
+    nu X(dsO:DoorStatus=lock, dsM:DoorStatus=lock, dsI:DoorStatus=lock).(
+        [doorState(inner, lock)]X(dsO, dsM, lock)       &&
+        [doorState(inner, unlock)]X(dsO, dsM, unlock)   &&
+        [doorState(middle, lock)]X(dsO, lock, dsI)      &&
+        [doorState(middle, unlock)]X(dsO, unlock, dsI)  &&
+        [doorState(outer, lock)]X(lock, dsM, dsI)       &&
+        [doorState(outer, unlock)]X(unlock, dsM, dsI)   &&
+        [doorState(outer, noreply)]X(noreply, dsM, dsI) &&
+        [setPressure(main, pres)]val(dsO == lock && dsM == lock)    &&
+        [setPressure(backup, pres)]val(dsM == lock && dsI == lock)  &&
+        <true>true
+    )

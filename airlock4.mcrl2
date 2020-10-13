@@ -20,7 +20,7 @@ act setPressure: Airlock # Pressure;
     doorFailChance: Bool;
 
 
-% NOT SAFE FOR WORK
+% Mapping function (Is it a good approach?)
 map buttonToDoor : Button -> Door;
 eqn buttonToDoor(bOuter) = outer;
 eqn buttonToDoor(bMiddleMain) = middle;
@@ -44,10 +44,6 @@ act sendAirlockInUse, receiveAirlockInUse, airlockInUse: Bool; % mapped to perso
 
 %------------------------------------------------------------M A I N _ C O N T R O L L E R------------------------------------------------------------------
 
-% Main controller logic
-% sends:updateDashboard/requestAccess/updateSpacecraftDocked
-% receives:buttons/docking/inUse/doorState
-
 proc MainController(u:Bool, a:Bool, d:Bool, mode:ControllerMode, currentButton:Button, sent:Bool)
 = (mode == ready) -> sum b:Button. (b != bDashboard) -> buttonPressed(b). MainController(mode = processing, currentButton = b, sent = true)
                                                      <> (
@@ -63,10 +59,6 @@ proc MainController(u:Bool, a:Bool, d:Bool, mode:ControllerMode, currentButton:B
 + sum cond:Bool. receiveDockingStatus(cond). updateDashboard(docked, cond). MainController(d = cond);
 
 %-----------------------------------------------------------D O O R _ C O N T R O L L E R ------------------------------------------------------------------
-
-% Door controller
-% sends:unlockDoor/sendDoorState/equalize/requestComplete
-% receives:doorState/requestAccess/pressureEqualized
 
 proc DoorController(out:DoorStatus, mid:DoorStatus, inn:DoorStatus, doorFail: Bool)
 = receiveRequestAccess(outer). (out == lock && mid == lock) -> (sendEqualize(outer, out).DoorController())
@@ -91,9 +83,6 @@ proc DoorController(out:DoorStatus, mid:DoorStatus, inn:DoorStatus, doorFail: Bo
 + (!doorFail) -> doorFailChance(true). DoorController(doorFail = true);
 
 %--------------------------------------------------------P R E S S U R E _ C O N T R O L L E R--------------------------------------------------------------
-
-%sends:setPressure, sendCheckDepressurizedConditions,sendPressureEquilized   
-%receive: receiveConditionsSatisfied, receiveEquilize
 
 proc PressureController(pO:Pressure, pM:Pressure, pB:Pressure, pS:Pressure, dr:Door, dockingChanges:Bool, currentlyDocked:Bool)
 = sum d:Door. (
@@ -127,8 +116,6 @@ proc PressureController(pO:Pressure, pM:Pressure, pB:Pressure, pS:Pressure, dr:D
 + (currentlyDocked) -> spacecraftDocked(false). sendDockingStatus(false). PressureController(pO = unpressurized, dockingChanges = true, currentlyDocked = false);
 
 %---------------------------------------------------------S A F E T Y _ C O N T R O L L E R-----------------------------------------------------------------
-
-%sends: sendInUse, sendConditionsSatisfied  receive: personDetected, tetherConnected
 
 proc SafetyController(perMain:Bool, perBack:Bool, tether:Bool, statOuter, statMiddle, statInner : DoorStatus)
 = sum airL: Airlock. (

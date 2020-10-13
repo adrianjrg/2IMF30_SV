@@ -1,19 +1,36 @@
-% 1. When a pressedButton(b) is detected, the appropriate requestAccess(d) is sent. % we cannot use it
+
+% [WORKS] 2. The unlockDoor(d) action will be executed if and only if buttonPressed(d) was sent first.
+[!(buttonPressed(bOuter) || buttonPressed(bDashboard))* .unlockDoor(outer)]false &&
+[!(buttonPressed(bInnerStation) || buttonPressed(bInnerBack))* .unlockDoor(inner)]false &&
+[!(buttonPressed(bMiddleMain) || buttonPressed(bMiddleBack))* .unlockDoor(middle)]false
+
+% 3. The unlockDoor(d) action will only be executed if getPressure(ps1, b) and getPressure(ps2, b) are equal where ps1, ps2 are the pressure sensors on both sides of door d.
+nu X(pO:Pressure = unpressurized, pM:Pressure = pressurized, pB:Pressure = pressurized, pS:Pressure = pressurized). (
+    [spacecraftDocked(true)]X(pressurized, pM, pB, pS)               &&
+    [spacecraftDocked(false)]X(unpressurized, pM, pB, pS)            &&
+    [setPressure(main, pressurized)]X(pO, pressurized, pB, pS)       &&
+    [setPressure(main, unpressurized)]X(pO, unpressurized, pB, pS)   &&
+    [setPressure(backup, pressurized)]X(pO, pM, pressurized, pS)     &&
+    [setPressure(backup, unpressurized)]X(pO, pM, unpressurized, pS) &&
+    [unlockDoor(outer)]val(pM == pO)                                     &&
+    [unlockDoor(middle)]val(pM == pB)                                    &&
+    [unlockDoor(inner)]val(pB == pS)                                     &&
+    [!((spacecraftDocked(true)) || spacecraftDocked(false) || setPressure(main, pressurized) || 
+    setPressure(main, unpressurized) || setPressure(backup, pressurized) || setPressure(backup, unpressurized))]X(pO, pM, pB, pS) &&
+    <true>true
+)
 
 
-% 2. The unlockDoor(d) action will be executed if and only if requestAccess(d) was sent first.
-
-
-% 3. The unlockDoor(d) action will be executed if getPressure(ps1, b) and getPressure(ps2, b) where ps1, ps2 are the pressure sensors on both sides of door d.
-
-
-% 4.The setPressure(airL, pres) actions will be executed if and only if requestAccess(d) was sent first.
-
+% 4.The setPressure(airL, pres) actions will be executed if and only if buttonPressed(d) was sent first.
+forall 
+[!(buttonPressed(bOuter) || buttonPressed(bDashboard))* .setPressure()]false &&
+[!(buttonPressed(bInnerStation) || buttonPressed(bInnerBack))* .setPressure()]false &&
+[!(buttonPressed(bMiddleMain) || buttonPressed(bMiddleBack))* .setPressure()]false
 
 % 5. (personDetected(main, true) implies tetheredConnected(true)) must be true to execute setPressure(main, depressurized).
 [true*].personDetected(main, true).[(!personDetected(main, false))*].[tetheredConnected(true)].[(!personDetected(main, false) && !tetheredConnected(false))*].[setPressure(main, depressurized)]
 
-% 6. personDetected(backup, false) must be true to execute setPressure(backup, depressurize). (WEIRD DEADLOCK)
+%[WORKS] 6. personDetected(backup, false) must be true to execute setPressure(backup, depressurize). (WEIRD DEADLOCK)
 %[true*. personDetected(backup, false)]<(!personDetected(backup, true))*. setPressure(backup, unpressurized)>true
 [true*. personDetected(backup, true)]<!personDetected(backup, false)*.setPressure(backup, unpressurized)>false
 
@@ -24,15 +41,11 @@ nu X(p:Bool=false).(
     <true>true
 )
 
-% 7. If spacecraftDocked(b) is received then execute updateDashboard(docked, b). (TRUE)
+%[WORKS] 7. If spacecraftDocked(b) is received then execute updateDashboard(docked, b). (TRUE)
 forall b: Bool.
     [true*.  spacecraftDocked(b)]<!spacecraftDocked(!b)* .updateDashboard(docked, b)>true
 
-% 8. If personDetected({main, backup}, b) is received then at some point execute updateDashboard(inUse, b).
-%forall a1, a2:Airlock, b1, b2:Bool.
-%    [true*.personDetected(a1, true)] mu X. nu Y.([!updateDashboard(inUse, true)]X && [tetherConnected(b1) || spacecraftDocked(b2)]Y && <true>true)
-
-% # Weaker version, allow livelocks 
+%[WORKS] 8. If personDetected({main, backup}, b) is received then at some point execute updateDashboard(inUse, b).
 % true* needs to exclude personDetected
 forall a1, a2:Airlock.
     [true*.personDetected(a1, true).!updateDashboard(inUse, true)]<true*.updateDashboard(inUse, true)>true &&
@@ -41,14 +54,26 @@ forall a1, a2:Airlock.
 % 9. If spacecraftDocked(true), then pressedButton(bDashboard) can be executed.
     [true*.spacecraftDocked(true)]<!spacecraftDocked(false)* . buttonPressed(bDashboard)>true
 
-% 10. setPressure(main, pres) can only be executed when doorState(outer, Locked) and doorState(middle, Locked). setPressure(backup, pres) can only be executed when doorState(middle, Locked) and doorState(inner, Locked).
-forall pres:Pressure.
-    nu X(ds1, ds2: DoorStatus).(
-        []
+%[works?] 10. setPressure(main, pres) can only be executed when doorState(outer, Locked) and doorState(middle, Locked). 
+%     setPressure(backup, pres) can only be executed when doorState(middle, Locked) and doorState(inner, Locked).
+forall pres:Pressure, d:Door, ds:DoorStatus.
+    nu X(dsO:DoorStatus=lock, dsM:DoorStatus=lock, dsI:DoorStatus=lock).(
+        [doorState(inner, lock)]X(dsO, dsM, lock)       &&
+        [doorState(inner, unlock)]X(dsO, dsM, unlock)   &&
+        [doorState(middle, lock)]X(dsO, lock, dsI)      &&
+        [doorState(middle, unlock)]X(dsO, unlock, dsI)  &&
+        [doorState(outer, lock)]X(lock, dsM, dsI)       &&
+        [doorState(outer, unlock)]X(unlock, dsM, dsI)   &&
+        [doorState(outer, noreply)]X(noreply, dsM, dsI) &&
+        [setPressure(main, pres)]val(dsO == lock && dsM == lock)    &&
+        [setPressure(backup, pres)]val(dsM == lock && dsI == lock)  &&
+        [!((doorState(d, ds) || setPressure(main, pres) || setPressure(backup, pres))]X(dsO, dsM, dsI) &&
+        <true>true
     )
 
-% 11. If doorState(outer, NoReply), then updateDashboard(alarm, true). (TRUE)
-[true*. doorState(outer, noreply)] <!(doorState(outer, lock) || doorState(outer, unlock))* .updateDashboard(alarm, true)>true
+% 11. If doorState(outer, NoReply), then updateDashboard(alarm, true).
+forall ds:DoorStatus.
+    [true*. doorState(outer, noreply)] <!(doorState(outer, ds))* .updateDashboard(alarm, true)>true
 
 % 12. If doorState(outer, NoReply), then eventually doorState(middle, unlock) will follow.
 [true*. doorState(outer, noreply)] <!(doorState(outer, lock) || doorState(outer, unlock))* .doorState(middle, unlock)>true
@@ -58,7 +83,8 @@ forall pres:Pressure.
     [true*.doorState(outer, noreply)] nu X.([!setPressure(main, pres)]X && [setPressure(main, pres)]false &&<true>true)
 
 % 13. If buttonPressed(b1) is detected, eventually buttonPressed(b2) can be executed
-
+forall b1, b2:Button.
+    [true*.buttonPressed(b1)]<true*.buttonPressed(b2)>true
 
 % 14. Only when at least one adjecent door is unlocked personDetected(airlock, b) can change to personDetected(airlock, !b)
 forall b:Bool.
@@ -76,19 +102,20 @@ forall b:Bool.
         [doorState(middle,unlock)]X(lockL, unlock) &&
         [personDetected(main, b)]val(is_unlock(lockL) || is_unlock(lockR)) &&
         <true>true)
-        
-    nu X(out:DoorStatus=lock,mid:DoorStatus=lock,inn:DoorStatus=lock).(
-        [doorState(outer, lock)]X(lock, mid, inn) &&
-        [doorState(outer, unlock)]X(unlock, mid, inn) &&
-        [doorState(middle, lock)]X(out, lock, inn) &&
-        [doorState(middle, unlock)]X(out, unlock, inn) &&
-        [doorState(inner, lock)]X(out, mid, lock) &&
-        [doorState(inner, unlock)]X(out, mid, unlock) &&
-        [personDetected(backup, b)]val(is_unlock())
-    )
+    
+% forall b:Bool.
+%     nu X(out:DoorStatus=lock,mid:DoorStatus=lock,inn:DoorStatus=lock).(
+%         [doorState(outer, lock)]X(lock, mid, inn)       &&
+%         [doorState(outer, unlock)]X(unlock, mid, inn)   &&
+%         [doorState(middle, lock)]X(out, lock, inn)      &&
+%         [doorState(middle, unlock)]X(out, unlock, inn)  &&
+%         [doorState(inner, lock)]X(out, mid, lock)       &&
+%         [doorState(inner, unlock)]X(out, mid, unlock)   &&
+%         [personDetected(backup, b)]val(is_unlock())
+%     )
 
 % 15. tetherConnected(true) is not possible if personDetected(main, false)
-
+[true*.personDetected(main, false)]<!personDetected(main, true).tetherConnected(true)>false
 
 %forall n: Name, p: PhoneNumber . forall b: PhoneBook .
 %  [true* . addPhone(n,p) .
