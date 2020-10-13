@@ -1,0 +1,1 @@
+[true*.personDetected(main, false). !personDetected(main, true)*]<!personDetected(main, true)*.tetherConnected(true)>false

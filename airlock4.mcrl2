@@ -4,7 +4,7 @@ sort Door = struct outer ? is_outer | middle ? is_middle | inner ? is_inner;
     Airlock = struct main ?is_main | backup ?is_backup;
     Button = struct bOuter | bMiddleMain | bMiddleBack | bInnerBack | bInnerStation | bDashboard;
     Pressure = struct unpressurized ?is_unpressurized | pressurized ?is_pressurized;
-    Environment = struct space ?is_space | mainAirlock ?is_mainAirlock | backupAirlock ?is_backupAirlock | station ?is_station;
+    % Environment = struct space ?is_space | mainAirlock ?is_mainAirlock | backupAirlock ?is_backupAirlock | station ?is_station;
     ControllerMode = struct processing | ready;
 
 
@@ -21,7 +21,7 @@ act setPressure: Airlock # Pressure;
 
 
 % Mapping function (Is it a good approach?)
-map buttonToDoor : Button -> Door;
+map buttonToDoor: Button -> Door;
 eqn buttonToDoor(bOuter) = outer;
 eqn buttonToDoor(bMiddleMain) = middle;
 eqn buttonToDoor(bMiddleBack) = middle;
@@ -43,7 +43,7 @@ act sendAirlockInUse, receiveAirlockInUse, airlockInUse: Bool; % mapped to perso
     sendDoorChange, receiveDoorChange, internalDoorChange: Door # DoorStatus; 
 
 %------------------------------------------------------------M A I N _ C O N T R O L L E R------------------------------------------------------------------
-
+% might implement a queue for button presses
 proc MainController(u:Bool, a:Bool, d:Bool, mode:ControllerMode, currentButton:Button, sent:Bool)
 = (mode == ready) -> sum b:Button. (b != bDashboard) -> buttonPressed(b). MainController(mode = processing, currentButton = b, sent = true)
                                                      <> (
@@ -123,7 +123,9 @@ proc SafetyController(perMain:Bool, perBack:Bool, tether:Bool, statOuter, statMi
     + ( is_backup(airL) -> sum b:Bool. (perBack != b && (statMiddle == unlock || statInner == unlock)) -> personDetected(airL, b). sendAirlockInUse(perMain || b). SafetyController(perBack = b) ) 
 )
 %+ sum b:Bool. (tether != b) -> tetherConnected(b). SafetyController(tether = b)
-+ (perMain && statOuter != unlock) -> ( sum b:Bool. (tether != b) -> tetherConnected(b). SafetyController(tether = b) ) %dont untether when open
+%+ (perMain && statOuter != unlock) -> ( sum b:Bool. (tether != b) -> tetherConnected(b). SafetyController(tether = b) ) %dont untether when open
++ sum b:Bool. (perMain && statOuter != unlock && tether != b) -> tetherConnected(b). SafetyController(tether = b)  %dont untether when open
+
 + receiveCheckDepressurizeConditions(main). sendConditionsSatisfied(main, tether || !perMain).SafetyController()
 + receiveCheckDepressurizeConditions(backup). sendConditionsSatisfied(backup, !perBack).SafetyController()
 + sum d:DoorStatus. (

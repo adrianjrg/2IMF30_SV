@@ -1,0 +1,2 @@
+forall b1, b2:Button.
+    [true*.buttonPressed(b1).true*.buttonPressed(b2)]true
