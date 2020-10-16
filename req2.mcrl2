@@ -1,0 +1,106 @@
+% WORKS::           1, 3, 4, 5, 6, 7, 8
+% IN PROGRESS::     2, 9, 10, 11, 12, 13, 14, 15, 16     
+% REQUIREMENTS STILL TO ADD::
+%   - The tether is always connected while the outer door is unlocked and no ship is docked
+
+% REFERENCES
+%[true* . b . !a*]<true* a> - if nothing works break glass
+
+% R1. Doors will only be unlocked following an appropriate button press.
+[!(buttonPressed(bOuter) || buttonPressed(bDashboard))*.unlockDoor(outer)]false
+&& [!(buttonPressed(bInnerStation) || buttonPressed(bInnerBack))*.unlockDoor(inner)]false
+&& [!(buttonPressed(bMiddleMain) || buttonPressed(bMiddleBack))*.unlockDoor(middle)]false
+
+% R2. A door will unlock if and only if both sides have equal pressure.
+% check inner door
+nu X(presBackup:Pressure=pressurized).(
+    [setPressure(backup, pressurized)]X(pressurized)        &&
+    [setPressure(backup, unpressurized)]X(unpressurized)    &&
+
+    % conditions to check
+    [unlockDoor(inner)]val(is_pressurized(presBackup))      &&
+
+    % everything else doesn't change the state
+    [exists pres:Pressure. !setPressure(backup, pres)]X(presBackup) &&
+    % no deadlock
+    <true>true
+)
+
+% R3. A change in pressure will only occur following a button press.
+forall p:Pressure, airL: Airlock.
+    [!(buttonPressed(bOuter) || buttonPressed(bDashboard) || buttonPressed(bInnerStation) || buttonPressed(bInnerBack) 
+    || buttonPressed(bMiddleMain) || buttonPressed(bMiddleBack))* . setPressure(airL, p)] false
+
+% R4. The main airlock will not be depressurized when an untethered person is present in that airlock.
+nu X(perMain:Bool = false, tetherCon:Bool = false). (
+    % keep track of person in main airlock and their tethered status
+    [personDetected(main, true)]X(true, tetherCon)                  && 
+    [personDetected(main, false)]X(false, tetherCon)                &&
+    [tetherConnected(true)]X(perMain, true)                         &&
+    [tetherConnected(false)]X(perMain, false)                       &&
+    
+    % when depressurizing main, an unthethered person may not be present 
+    [setPressure(main, unpressurized)]val(!(perMain == true && tetherCon == false))       &&
+
+    % all other actions don't change anything
+    [!(personDetected(main, true) || tetherConnected(true) || personDetected(main, false) || tetherConnected(false))]X(perMain, tetherCon) &&
+    % and no deadlocks
+    <true>true
+)
+
+% R5. The backup airlock will not depressurize if a person is present.
+nu X(perBack:Bool = false). (
+    [personDetected(backup, true)]X(true)                  && 
+    [personDetected(backup, false)]X(false)                &&
+    
+    % when depressurizing backup, a person may not be present 
+    [setPressure(backup, unpressurized)]val(!perBack)       &&
+    
+    % all other actions don't change anything
+    [!(personDetected(backup, true) || personDetected(backup, false))]X(perBack) &&
+    % and no deadlocks
+    <true>true
+)
+
+% R6. If and only if a spacecraft is docked on the docking station, the dashboard will display a ’Docked’ status.
+forall b: Bool.
+    [true*.  spacecraftDocked(b). !updateDashboard(docked, b)*]<true*. updateDashboard(docked, b)>true
+    
+% R7. While any person detector detects a person the dashboard will display an ’Air-lock in use’ status.
+forall a1, a2:Airlock.
+    [true*.personDetected(a1, true).!updateDashboard(inUse, true)]<true*.updateDashboard(inUse, true)>true &&
+    [true*.personDetected(a1, false).(!personDetected(a1, true))*.personDetected(a2, false)]<true*.updateDashboard(inUse, true)>val(a1 != a2)
+
+%nu X(perMain:Bool = false, perBack:Bool = false). (
+%    [personDetected(main, true)]X(true, perBack)
+%    && [personDetected(main, false)]X(false, perBack)      
+%    && [personDetected(backup, true)]X(perMain, true)
+%    && [personDetected(backup, false)]X(perMain, false)
+%    && (perMain || perBack) => (
+%        mu Y. (
+%            [!updateDashboard(inUse, true)]Y
+%            && <true>true
+%        )
+%    )
+%    && (!perMain && !perBack) => (
+%        mu Z. (
+%            [!updateDashboard(inUse, false)]Z
+%            && <true>true
+%        )
+%    )
+%)
+
+% R8. An operator can request to open the outer door with a dashboard button if and only if there is a spacecraft docked.
+[true*.updateDashboard(docked, false). !updateDashboard(docked,true)* . buttonPressed(bDashboard)]false
+
+% R9. An airlock will not change pressure unless both adjacent doors are locked.
+% R10. If and only if the outer door fails, the dashboard will display an ’Alarm’ status.
+% R11. You can not press a button immediately following another button press (some processes must take place in between). [buttonPressed(b1)]<buttonPressed(b2)>false
+% R12. The tether sensor will not change readings if a person is not present in the main airlock and the outer door is not unlocked.
+% R13. Person detector may change readings if at least one of the two adjacent doors is unlocked.
+% R14. While a tether is attached, a person is always detected in the main airlock.
+% R15. After a button is pressed, eventually another button can be pressed.
+% R16. Once the outer door fails, the pressure in the main airlock should not be changed.
+
+% Sanity checks
+% U1. If the outer door fails and there is a person present in the main airlock, eventually the middle door will be able to unlock.

@@ -1,0 +1,12 @@
+nu X(presBackup:Pressure=pressurized).(
+    [setPressure(backup, pressurized)]X(pressurized)        &&
+    [setPressure(backup, unpressurized)]X(unpressurized)    &&
+
+    % conditions to check
+    [unlockDoor(inner)]val(is_pressurized(presBackup))      &&
+
+    % everything else doesn't change the state
+    [exists pres:Pressure. !setPressure(backup, pres)]X(presBackup) &&
+    % no deadlock
+    <true>true
+)

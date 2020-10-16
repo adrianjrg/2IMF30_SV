@@ -19,7 +19,7 @@ nu X(pO:Pressure = unpressurized, pM:Pressure = pressurized, pB:Pressure = press
     [setPressure(main, unpressurized)]X(pO, unpressurized, pB, pS)   &&
     [setPressure(backup, pressurized)]X(pO, pM, pressurized, pS)     &&
     [setPressure(backup, unpressurized)]X(pO, pM, unpressurized, pS) &&
-    [unlockDoor(outer)]val(pM == pO)                                     &&
+    [unlockDoor(outer)]val(pM == pO)                                     && % Failure here <<<<------- because docking changes during door operation (bDashboard)
     [unlockDoor(middle)]val(pM == pB)                                    &&
     [unlockDoor(inner)]val(pB == pS)                                     &&
     [!((spacecraftDocked(true)) || spacecraftDocked(false) || setPressure(main, pressurized) || 
@@ -83,7 +83,7 @@ forall pres:Pressure, d:Door, ds:DoorStatus.
 
 % [WORKS] 11. If doorState(outer, NoReply), then updateDashboard(alarm, true).
 forall ds:DoorStatus.
-    [true*. doorState(outer, noreply). !(doorState(outer, ds))*. updateDashboard(alarm, true)]true
+    [true*. doorState(outer, noreply). !updateDashboard(alarm, true)*]<true*. updateDashboard(alarm, true)>true
 
 % [WORKS] 12. If doorState(outer, NoReply), then eventually doorState(middle, unlock) will follow.
 [true*. doorState(outer, noreply) . !(doorState(outer, lock) || doorState(outer, unlock))* .doorState(middle, unlock)]true
@@ -134,3 +134,4 @@ forall b:Bool.
 
 %        mu X(n:Nat=0) . (val(n <  (N - 1) + (N - 2)) && <!all_done> X(n+1))
 %             || (val(n == (N - 1) + (N - 2)) && <all_done> true)
+

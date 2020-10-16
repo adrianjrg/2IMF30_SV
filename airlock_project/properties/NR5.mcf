@@ -1,0 +1,12 @@
+nu X(perBack:Bool = false). (
+    [personDetected(backup, true)]X(true)                  && 
+    [personDetected(backup, false)]X(false)                &&
+    
+    % when depressurizing backup, a person may not be present 
+    [setPressure(backup, unpressurized)]val(!perBack)       &&
+    
+    % all other actions don't change anything
+    [!(personDetected(backup, true) || personDetected(backup, false))]X(perBack) &&
+    % and no deadlocks
+    <true>true
+)

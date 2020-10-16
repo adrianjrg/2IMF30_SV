@@ -1,0 +1,3 @@
+[!(buttonPressed(bOuter) || buttonPressed(bDashboard))*.unlockDoor(outer)]false
+&& [!(buttonPressed(bInnerStation) || buttonPressed(bInnerBack))*.unlockDoor(inner)]false
+&& [!(buttonPressed(bMiddleMain) || buttonPressed(bMiddleBack))*.unlockDoor(middle)]false

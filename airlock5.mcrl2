@@ -65,12 +65,10 @@ act sendAirlockInUse, receiveAirlockInUse, airlockInUse: Airlock # Bool; % mappe
 
 proc MainController(uM:Bool, uB:Bool, a:Bool, d:Bool, mode:ControllerMode, currentButton:Button, sent:Bool)
 = (mode == ready) -> sum b:Button. (b == bInnerStation) -> buttonPressed(b). MainController(mode = processing, currentButton = b, sent = true)
-                                                     <> (
-										(uB && (b == bInnerBack || b == bMiddleBack)) -> buttonPressed(b). MainController(mode = processing, currentButton = b, sent = true)
-										+ (uM && (b == bMiddleMain)) -> buttonPressed(b). MainController(mode = processing, currentButton = b, sent = true)
-                                        + (d && !a && b == bDashboard) -> buttonPressed(bDashboard). MainController(mode = processing, currentButton = b, sent = true)
-										+ (uM && !a && b == bOuter) -> buttonPressed(bOuter). MainController(mode = processing, currentButton = b, sent = true)
-                                    )
+                                                        <> ((uB && (b == bInnerBack || b == bMiddleBack)) -> buttonPressed(b). MainController(mode = processing, currentButton = b, sent = true)
+                                                            + (uM && (b == bMiddleMain)) -> buttonPressed(b). MainController(mode = processing, currentButton = b, sent = true)
+                                                            + (d && !a && b == bDashboard) -> buttonPressed(bDashboard). MainController(mode = processing, currentButton = b, sent = true)
+                                                            + (uM && !a && b == bOuter) -> buttonPressed(bOuter). MainController(mode = processing, currentButton = b, sent = true))
                  <> ((sent) -> sendRequestAccess(buttonToDoor(currentButton)).MainController(sent = false)
                      + receiveRequestCompleted.MainController(mode = ready)
                      )
@@ -138,11 +136,11 @@ proc PressureController(pO:Pressure, pM:Pressure, pB:Pressure, pS:Pressure, dr:D
     )
     % error case
     + receiveEqualize(d, noreply). (
-    (d == middle && pM == unpressurized) -> sendCheckDepressurizeConditions(backup) .PressureController(pB = unpressurized, dr = d, dockingChanges = false)
-    + (d == middle && pM == pressurized) -> sendPressureEquilized(d, true). receiveDoorACK.PressureController(pB = unpressurized, dr = d, dockingChanges = false) %is backup will never be unpressurized if main is pressurized.
-    
-    + (d == inner && pB == pressurized) -> sendPressureEquilized(d, true && !dockingChanges). receiveDoorACK .PressureController(pB = pressurized, dr = d, dockingChanges = false)
-    + (d == inner && pB == unpressurized) -> setPressure(backup, pressurized). sendPressureEquilized(d, true && !dockingChanges). receiveDoorACK .PressureController(pB = pressurized, dr = d, dockingChanges = false)
+        (d == middle && pM == unpressurized) -> sendCheckDepressurizeConditions(backup) .PressureController(pB = unpressurized, dr = d, dockingChanges = false)
+        + (d == middle && pM == pressurized) -> sendPressureEquilized(d, true). receiveDoorACK.PressureController(pB = unpressurized, dr = d, dockingChanges = false) %is backup will never be unpressurized if main is pressurized.
+        
+        + (d == inner && pB == pressurized) -> sendPressureEquilized(d, true && !dockingChanges). receiveDoorACK .PressureController(pB = pressurized, dr = d, dockingChanges = false)
+        + (d == inner && pB == unpressurized) -> setPressure(backup, pressurized). sendPressureEquilized(d, true && !dockingChanges). receiveDoorACK .PressureController(pB = pressurized, dr = d, dockingChanges = false)
     )
 )
 + sum airL:Airlock. receiveConditionsSatisfied(airL, true). setPressure(airL, unpressurized). sendPressureChanged. sendPressureEquilized(dr, true && !dockingChanges). receiveDoorACK . PressureController()

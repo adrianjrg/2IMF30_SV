@@ -1,0 +1,11 @@
+nu X(perMain:Bool = false, tetherCon:Bool = false). (
+    [personDetected(main, true)]X(true, tetherCon)                  && 
+    [tetherConnected(true)]X(perMain, true)                         &&
+    [personDetected(main, false)]X(false, tetherCon)                &&
+    [tetherConnected(false)]X(perMain, false)                       &&
+       
+    [setPressure(main, unpressurized)]val(perMain => tetherCon)       &&
+    
+    [!(personDetected(main, true) || tetherConnected(true) || personDetected(main, false) || tetherConnected(false))]X(perMain, tetherCon) &&
+    <true>true
+)
