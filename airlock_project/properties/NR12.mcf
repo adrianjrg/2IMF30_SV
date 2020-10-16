@@ -1,0 +1,14 @@
+nu X(perMain: Bool = false, dO: DoorStatus = lock) . (
+    [personDetected(main, true)]X(true, dO)             &&
+    [personDetected(main, false)]X(false, dO)           &&
+    
+    [unlockDoor(outer)]X(perMain, unlock)               &&
+    [doorState(outer, noreply)]X(perMain, noreply)      &&
+    [doorState(outer, lock)]X(perMain, lock)            &&
+
+    [forall b:Bool. tetherConnected(b)]val(perMain == true && dO != unlock)    &&
+    
+    [ !(personDetected(main, true) || personDetected(main, false) || unlockDoor(outer) || doorState(outer, noreply) ||
+    doorState(outer, lock)) ]X(perMain, dO) &&
+    <true>true
+)

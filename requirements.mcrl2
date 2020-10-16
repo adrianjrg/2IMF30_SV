@@ -19,11 +19,11 @@ nu X(pO:Pressure = unpressurized, pM:Pressure = pressurized, pB:Pressure = press
     [setPressure(main, unpressurized)]X(pO, unpressurized, pB, pS)   &&
     [setPressure(backup, pressurized)]X(pO, pM, pressurized, pS)     &&
     [setPressure(backup, unpressurized)]X(pO, pM, unpressurized, pS) &&
-    [unlockDoor(outer)]val(pM == pO)                                     && % Failure here <<<<------- because docking changes during door operation (bDashboard)
+    [unlockDoor(outer)]val(pM == pO)                                     &&
     [unlockDoor(middle)]val(pM == pB)                                    &&
     [unlockDoor(inner)]val(pB == pS)                                     &&
     [!((spacecraftDocked(true)) || spacecraftDocked(false) || setPressure(main, pressurized) || 
-    setPressure(main, unpressurized) || setPressure(backup, pressurized) || setPressure(backup, unpressurized))]X(pO, pM, pB, pS) &&
+        setPressure(main, unpressurized) || setPressure(backup, pressurized) || setPressure(backup, unpressurized))]X(pO, pM, pB, pS) &&
     <true>true
 )
 

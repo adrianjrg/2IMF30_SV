@@ -1,0 +1,2 @@
+forall p:Pressure.
+    [true*. doorState(outer, noreply). !setPressure(main, p)* .setPressure(main, p)]false

@@ -1,0 +1,1 @@
+[true*.forall b1:Button.buttonPressed(b1)]<forall b2:Button. buttonPressed(b2)>false

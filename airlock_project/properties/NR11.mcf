@@ -1,0 +1,2 @@
+forall b1, b2:Button.
+    [true*.buttonPressed(b1)]<buttonPressed(b2)>false

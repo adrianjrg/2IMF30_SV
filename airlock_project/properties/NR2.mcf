@@ -1,12 +1,14 @@
-nu X(presBackup:Pressure=pressurized).(
-    [setPressure(backup, pressurized)]X(pressurized)        &&
-    [setPressure(backup, unpressurized)]X(unpressurized)    &&
-
-    % conditions to check
-    [unlockDoor(inner)]val(is_pressurized(presBackup))      &&
-
-    % everything else doesn't change the state
-    [exists pres:Pressure. !setPressure(backup, pres)]X(presBackup) &&
-    % no deadlock
+nu X(pO:Pressure = unpressurized, pM:Pressure = pressurized, pB:Pressure = pressurized, pS:Pressure = pressurized). (
+    [spacecraftDocked(true)]X(pressurized, pM, pB, pS)               &&
+    [spacecraftDocked(false)]X(unpressurized, pM, pB, pS)            &&
+    [setPressure(main, pressurized)]X(pO, pressurized, pB, pS)       &&
+    [setPressure(main, unpressurized)]X(pO, unpressurized, pB, pS)   &&
+    [setPressure(backup, pressurized)]X(pO, pM, pressurized, pS)     &&
+    [setPressure(backup, unpressurized)]X(pO, pM, unpressurized, pS) &&
+    [unlockDoor(outer)]val(pM == pO)                                 &&
+    [unlockDoor(middle)]val(pM == pB)                                &&
+    [unlockDoor(inner)]val(pB == pS)                                 &&
+    [!((spacecraftDocked(true)) || spacecraftDocked(false) || setPressure(main, pressurized) || 
+        setPressure(main, unpressurized) || setPressure(backup, pressurized) || setPressure(backup, unpressurized))]X(pO, pM, pB, pS) &&
     <true>true
 )
