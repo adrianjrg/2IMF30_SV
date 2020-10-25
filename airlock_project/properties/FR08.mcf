@@ -1,0 +1,2 @@
+% R8. An operator can request to open the outer door with a dashboard button if and only if there is a spacecraft docked.
+[true*.updateDashboard(docked, false). !updateDashboard(docked,true)* . buttonPressed(bDashboard)]false

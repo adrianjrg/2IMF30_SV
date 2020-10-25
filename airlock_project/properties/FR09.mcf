@@ -1,3 +1,4 @@
+% R9. An airlock will not change pressure unless both adjacent doors are locked.
 nu X(dO: DoorStatus = lock, dM: DoorStatus = lock, dI: DoorStatus = lock).(
     % keep track of doorstatus during operation
     [unlockDoor(inner)]X(dO, dM, unlock)            &&
@@ -10,13 +11,9 @@ nu X(dO: DoorStatus = lock, dM: DoorStatus = lock, dI: DoorStatus = lock).(
 
     [doorState(outer, noreply)]X(noreply, dM, dI)   &&
     
-    [forall p:Pressure. setPressure(main, p)](val(dO == lock && dM == lock))        &&
-    [forall p:Pressure. setPressure(backup, p)](val(dM == lock && dI == lock))      &&
+    forall p:Pressure.[setPressure(main, p)](val(dO == lock && dM == lock))        &&
+    forall p:Pressure.[setPressure(backup, p)](val(dM == lock && dI == lock))      &&
     % all other actions don't change anything
     [ !(unlockDoor(inner) || unlockDoor(middle) || unlockDoor(outer) || doorState(inner, lock) || 
-        doorState(middle, lock) || doorState(outer, lock) || doorState(outer, noreply) ||
-        setPressure(main, pressurized) || setPressure(main, unpressurized) ||
-        setPressure(backup, pressurized) || setPressure(backup, unpressurized)) ]X(dO, dM, dI) &&
-    % no deadlocks
-    <true>true
+        doorState(middle, lock) || doorState(outer, lock) || doorState(outer, noreply)) ]X(dO, dM, dI)
 )

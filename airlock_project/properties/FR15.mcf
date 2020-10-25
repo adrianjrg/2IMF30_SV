@@ -1,2 +1,3 @@
+% R15. Once the outer door fails, the pressure in the main airlock should not be changed. FAILED
 forall p:Pressure.
     [true*. doorState(outer, noreply). !setPressure(main, p)* .setPressure(main, p)]false

@@ -1,2 +1,0 @@
-forall b: Bool.
-    [true*.  spacecraftDocked(b). !spacecraftDocked(!b)* .updateDashboard(docked, b)]true

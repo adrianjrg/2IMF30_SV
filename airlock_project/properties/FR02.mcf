@@ -1,0 +1,14 @@
+% R2. A door can unlock if and only if both sides have equal pressure.
+nu X(pO:Pressure = unpressurized, pM:Pressure = pressurized, pB:Pressure = pressurized). (
+    [spacecraftDocked(true)]X(pressurized, pM, pB)               &&
+    [spacecraftDocked(false)]X(unpressurized, pM, pB)            &&
+    [setPressure(main, pressurized)]X(pO, pressurized, pB)       &&
+    [setPressure(main, unpressurized)]X(pO, unpressurized, pB)   &&
+    [setPressure(backup, pressurized)]X(pO, pM, pressurized)     &&
+    [setPressure(backup, unpressurized)]X(pO, pM, unpressurized) &&
+    [unlockDoor(outer)]val(pM == pO)                                 &&
+    [unlockDoor(middle)]val(pM == pB)                                &&
+    [unlockDoor(inner)]val(pB == pressurized)                                 &&
+    [!((spacecraftDocked(true)) || spacecraftDocked(false) || setPressure(main, pressurized) || 
+        setPressure(main, unpressurized) || setPressure(backup, pressurized) || setPressure(backup, unpressurized))]X(pO, pM, pB)
+)

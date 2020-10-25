@@ -1,0 +1,2 @@
+exists b2: Button.
+    [true*. buttonPressed(bMiddleMain). !buttonPressed(b2)*]<true*.buttonPressed(b2)>true

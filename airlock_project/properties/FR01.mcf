@@ -1,0 +1,4 @@
+% R1. Doors will only be unlocked following an appropriate button press.
+[!(buttonPressed(bOuter) || buttonPressed(bDashboard))*.unlockDoor(outer)]false         &&
+[!(buttonPressed(bInnerStation) || buttonPressed(bInnerBack))*.unlockDoor(inner)]false  &&
+[!(buttonPressed(bMiddleMain) || buttonPressed(bMiddleBack))*.unlockDoor(middle)]false

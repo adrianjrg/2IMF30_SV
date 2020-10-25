@@ -1,3 +1,0 @@
-forall a1, a2:Airlock.
-    [true*.personDetected(a1, true).!updateDashboard(inUse, true)]<true*.updateDashboard(inUse, true)>true &&
-    [true*.personDetected(a1, false).(!personDetected(a1, true))*.personDetected(a2, false)]<true*.updateDashboard(inUse, true)>val(a1 != a2)

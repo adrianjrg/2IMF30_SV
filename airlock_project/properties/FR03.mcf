@@ -1,3 +1,4 @@
+% R3. A change in pressure will only occur following a button press.
 forall p:Pressure, airL: Airlock.
     [!(buttonPressed(bOuter) || buttonPressed(bDashboard) || buttonPressed(bInnerStation) || buttonPressed(bInnerBack) 
     || buttonPressed(bMiddleMain) || buttonPressed(bMiddleBack))* . setPressure(airL, p)] false

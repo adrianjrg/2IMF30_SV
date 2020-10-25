@@ -1,0 +1,2 @@
+% R10. If and only if the outer door fails, the dashboard will display an ’Alarm’ status.
+[true*. doorState(outer, noreply). !updateDashboard(alarm, true)*]<true*. updateDashboard(alarm, true)>true

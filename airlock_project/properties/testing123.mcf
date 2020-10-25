@@ -1,0 +1,1 @@
+[!(spacecraftDocked(true) || spacecraftDocked(false))*]<!(spacecraftDocked(true) || spacecraftDocked(false))>true

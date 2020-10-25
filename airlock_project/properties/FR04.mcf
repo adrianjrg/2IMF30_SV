@@ -1,0 +1,14 @@
+% R4. The main airlock will not be depressurized when an untethered person is present in that airlock.
+nu X(perMain:Bool = false, tetherCon:Bool = false). (
+    % keep track of person in main airlock and their tethered status
+    [personDetected(main, true)]X(true, tetherCon)                  && 
+    [personDetected(main, false)]X(false, tetherCon)                &&
+    [tetherConnected(true)]X(perMain, true)                         &&
+    [tetherConnected(false)]X(perMain, false)                       &&
+    
+    % when depressurizing main, an unthethered person may not be present 
+    [setPressure(main, unpressurized)]val(!(perMain == true && tetherCon == false))       &&
+
+    % all other actions don't change anything
+    [!(personDetected(main, true) || tetherConnected(true) || personDetected(main, false) || tetherConnected(false))]X(perMain, tetherCon)
+)

@@ -2,34 +2,27 @@
  <spec>airlock_project_spec.mcrl2</spec>
  <properties>
   <property>No deadlocks</property>
-  <property>Requirement 8</property>
-  <property>Requirement 8 with livelocks</property>
-  <property>R8 part 3</property>
-  <property>R6</property>
-  <property>Anti teleportation</property>
-  <property>R10</property>
-  <property>Req9</property>
-  <property>Req7</property>
-  <property>Req13</property>
-  <property>Req15</property>
-  <property>NR2</property>
-  <property>R1</property>
-  <property>NR3</property>
-  <property>NR4</property>
-  <property>NR5</property>
-  <property>NR6</property>
-  <property>NR7</property>
-  <property>NR8</property>
-  <property>OldR3</property>
-  <property>NR9</property>
-  <property>NR10</property>
-  <property>NR11</property>
-  <property>NR11 optimized</property>
-  <property>NR12</property>
-  <property>NR13</property>
-  <property>NR14</property>
-  <property>NR15</property>
-  <property>R9 Updated</property>
-  <property>NR7 take 2</property>
+  <property>FR01</property>
+  <property>FR02</property>
+  <property>FR03</property>
+  <property>FR04</property>
+  <property>FR05</property>
+  <property>FR06</property>
+  <property>FR07</property>
+  <property>FR08</property>
+  <property>FR09</property>
+  <property>FR10</property>
+  <property>FR11</property>
+  <property>FR12</property>
+  <property>FR13</property>
+  <property>FR14</property>
+  <property>FR15</property>
+  <property>testing123</property>
+  <property>FR14a</property>
+  <property>FR14b</property>
+  <property>FR14c</property>
+  <property>FR14d</property>
+  <property>FR14e</property>
+  <property>FR14f</property>
  </properties>
 </root>

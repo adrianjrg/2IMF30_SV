@@ -1,3 +1,4 @@
+% R13. Person detector may change readings if at least one of the two adjacent doors is unlocked. 
 nu X(dO: DoorStatus = lock, dM: DoorStatus = lock, dI: DoorStatus = lock).(
     [unlockDoor(inner)]X(dO, dM, unlock)            &&
     [unlockDoor(middle)]X(dO, unlock, dI)           &&
@@ -10,12 +11,12 @@ nu X(dO: DoorStatus = lock, dM: DoorStatus = lock, dI: DoorStatus = lock).(
     [doorState(outer, noreply)]X(noreply, dM, dI)   &&
 
 
-    [forall b:Bool. personDetected(main, b)](val(dO == unlock || dM == unlock))        &&
-    [forall b:Bool. personDetected(backup, b)](val(dM == unlock || dI == unlock))      &&
-    
+    [personDetected(main, true)](val(dO == unlock || dM == unlock))        &&
+    [personDetected(main, false)](val(dO == unlock || dM == unlock))        &&
+    [personDetected(backup, true)](val(dM == unlock || dI == unlock))      &&
+    [personDetected(backup, false)](val(dM == unlock || dI == unlock))      &&
+
     
     [ !(unlockDoor(inner) || unlockDoor(middle) || unlockDoor(outer) || doorState(inner, lock) || 
-        doorState(middle, lock) || doorState(outer, lock) || doorState(outer, noreply))]X(dO, dM, dI) &&
-    
-    <true>true
+        doorState(middle, lock) || doorState(outer, lock) || doorState(outer, noreply))]X(dO, dM, dI)
 )

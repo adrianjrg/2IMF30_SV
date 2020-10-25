@@ -1,0 +1,3 @@
+% R6. If and only if a spacecraft is docked on the docking station, the dashboard will display a ’Docked’ status.
+forall b: Bool.
+    [true*.  spacecraftDocked(b). !updateDashboard(docked, b)*]<true*. updateDashboard(docked, b)>true

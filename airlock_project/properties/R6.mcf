@@ -1,1 +1,0 @@
-[true*. personDetected(backup, false)]<!personDetected(backup, true)*. setPressure(backup, unpressurized)>true

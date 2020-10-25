@@ -1,0 +1,150 @@
+% R1. Doors will only be unlocked following an appropriate button press.
+[!(buttonPressed(bOuter) || buttonPressed(bDashboard))*.unlockDoor(outer)]false
+&& [!(buttonPressed(bInnerStation) || buttonPressed(bInnerBack))*.unlockDoor(inner)]false
+&& [!(buttonPressed(bMiddleMain) || buttonPressed(bMiddleBack))*.unlockDoor(middle)]false
+
+% R2. A door can unlock if and only if both sides have equal pressure.
+% pO, pM and pB - represent the pressure outside the spacestation, in the main airlock and inside the backup airlock, respectively.
+nu X(pO:Pressure = unpressurized, pM:Pressure = pressurized, pB:Pressure = pressurized). (
+    % Keep track of the observational variables.
+    [spacecraftDocked(true)]X(pressurized, pM, pB)               
+    && [spacecraftDocked(false)]X(unpressurized, pM, pB)            
+    && [setPressure(main, pressurized)]X(pO, pressurized, pB)       
+    && [setPressure(main, unpressurized)]X(pO, unpressurized, pB)   
+    && [setPressure(backup, pressurized)]X(pO, pM, pressurized)     
+    && [setPressure(backup, unpressurized)]X(pO, pM, unpressurized) 
+    % Conditions to satisfy.
+    && [unlockDoor(outer)]val(pM == pO)                                 
+    && [unlockDoor(middle)]val(pM == pB)                                
+    && [unlockDoor(inner)]val(pB == pressurized)                                 
+    % Every other external action doesn't change anything.
+    && [!((spacecraftDocked(true)) || spacecraftDocked(false) || setPressure(main, pressurized) || 
+        setPressure(main, unpressurized) || setPressure(backup, pressurized) || setPressure(backup, unpressurized))]X(pO, pM, pB)
+)
+
+% R3. A change in pressure can only occur following a button press.
+forall p:Pressure, airL: Airlock.
+    [!(buttonPressed(bOuter) || buttonPressed(bDashboard) || buttonPressed(bInnerStation) || buttonPressed(bInnerBack) 
+    || buttonPressed(bMiddleMain) || buttonPressed(bMiddleBack))* . setPressure(airL, p)] false
+
+% R4. The main airlock cannot be depressurized when an untethered person is present in that airlock.
+% perMain - represent whether a person is present in the main airlock
+% tetherCon - represent whether the tether is connected
+nu X(perMain:Bool = false, tetherCon:Bool = false). (
+    % Keep track of the observational variables.
+    [personDetected(main, true)]X(true, tetherCon)                  
+    && [personDetected(main, false)]X(false, tetherCon)               
+    && [tetherConnected(true)]X(perMain, true)                        
+    && [tetherConnected(false)]X(perMain, false)                      
+    % Condition to satisfy.
+    && [setPressure(main, unpressurized)]val(!(perMain == true && tetherCon == false))     
+    % Every other external action doesn't change anything.
+    && [!(personDetected(main, true) || tetherConnected(true) || personDetected(main, false) || tetherConnected(false))]X(perMain, tetherCon)
+)
+
+% R5. The backup airlock cannot depressurize if a person is present.
+% perMain - represent whether a person is present in the backup airlock
+nu X(perBack:Bool = false). (
+    % Keep track of the observational variables.
+    [personDetected(backup, true)]X(true)                 
+    && [personDetected(backup, false)]X(false)              
+    % Condition to satisfy.
+    && [setPressure(backup, unpressurized)]val(!perBack)   
+    % Every other external action doesn't change anything.
+    && [!(personDetected(backup, true) || personDetected(backup, false))]X(perBack)
+)
+
+% R6. If and only if a spacecraft is docked on the docking station, the dashboard will display a ’Docked’ status.
+forall b: Bool.
+    [true*.  spacecraftDocked(b). !updateDashboard(docked, b)*]<true*. updateDashboard(docked, b)>true
+    
+% R7. While any person detector detects a person the dashboard will display an ’Air-lock in use’ status.
+forall a1, a2:Airlock.
+    [true*.personDetected(a1, true).!updateDashboard(inUse, true)*]<true*.updateDashboard(inUse, true)>true &&
+    [true*.personDetected(a1, false).(!personDetected(a1, true))*.personDetected(a2, false)]<true*.updateDashboard(inUse, false)>val(a1 != a2)
+
+
+% R8. An operator can request to open the outer door with a dashboard button if and only if there is a spacecraft docked.
+[true*.updateDashboard(docked, false). !updateDashboard(docked,true)* . buttonPressed(bDashboard)]false
+
+% R9. An airlock will not change pressure unless both adjacent doors are locked.
+% dO, dM and dI - represent the statuses of the outer, middle and inner door, respectively.
+nu X(dO: DoorStatus = lock, dM: DoorStatus = lock, dI: DoorStatus = lock).(
+    % Keep track of the observational variables.
+    [unlockDoor(inner)]X(dO, dM, unlock)           
+    && [unlockDoor(middle)]X(dO, unlock, dI)          
+    && [unlockDoor(outer)]X(unlock, dM, dI)           
+    && [doorState(inner, lock)]X(dO, dM, lock)        
+    && [doorState(middle, lock)]X(dO, lock, dI)       
+    && [doorState(outer, lock)]X(lock, dM, dI)        
+    && [doorState(outer, noreply)]X(noreply, dM, dI)  
+    % Conditions to satisfy.
+    && forall p:Pressure.[setPressure(main, p)](val(dO == lock && dM == lock))       
+    && forall p:Pressure.[setPressure(backup, p)](val(dM == lock && dI == lock))     
+    % Every other external action doesn't change anything.
+    && [ !(unlockDoor(inner) || unlockDoor(middle) || unlockDoor(outer) || doorState(inner, lock) || 
+        doorState(middle, lock) || doorState(outer, lock) || doorState(outer, noreply)) ]X(dO, dM, dI)
+)
+
+% R10. If and only if the outer door fails, the dashboard will display an ’Alarm’ status.
+[true*. doorState(outer, noreply). !updateDashboard(alarm, true)*]<true*. updateDashboard(alarm, true)>true
+
+% R11. The system doesn't deadlock.
+[true*]<true>true
+
+% R12. The tether sensor will not change readings if : no person is present in the main airlock - and the outer door is unlocked.
+% perMain - represent whether a person is present in the backup airlock
+% dO - represents the status of the outer door
+nu X(perMain: Bool = false, dO: DoorStatus = lock) . (
+    % Keep track of the observational variables.
+    [personDetected(main, true)]X(true, dO)            
+    && [personDetected(main, false)]X(false, dO)          
+    && [doorState(outer, unlock)]X(perMain, unlock)       
+    && [doorState(outer, noreply)]X(perMain, noreply)     
+    && [doorState(outer, lock)]X(perMain, lock)           
+    % Condition to satisfy.
+    && forall b:Bool.[tetherConnected(b)]val(perMain == true && dO != unlock)    &&
+    % Every other external action doesn't change anything.
+    && [ !(personDetected(main, true) || personDetected(main, false) || unlockDoor(outer) || doorState(outer, noreply) ||
+        doorState(outer, lock)) ]X(perMain, dO)
+)
+
+% R13. Person detector may change readings if at least one of the two adjacent doors is unlocked.
+% dO, dM and dI - represent the statuses of the outer, middle and inner door, respectively.
+nu X(dO: DoorStatus = lock, dM: DoorStatus = lock, dI: DoorStatus = lock).(
+    % Keep track of the observational variables.
+    [doorState(inner, unlock)]X(dO, dM, unlock)    
+    && [doorState(middle, unlock)]X(dO, unlock, dI)    
+    && [doorState(outer, unlock)]X(unlock, dM, dI)     
+    && [doorState(inner, lock)]X(dO, dM, lock)         
+    && [doorState(middle, lock)]X(dO, lock, dI)        
+    && [doorState(outer, lock)]X(lock, dM, dI)         
+    && [doorState(outer, noreply)]X(noreply, dM, dI)   
+    % Conditions to satisfy.
+    && [personDetected(main, true)](val(dO == unlock || dM == unlock))     
+    && [personDetected(main, false)](val(dO == unlock || dM == unlock))    
+    && [personDetected(backup, true)](val(dM == unlock || dI == unlock))   
+    && [personDetected(backup, false)](val(dM == unlock || dI == unlock))  
+    % Every other external action doesn't change anything.
+    && [ !(doorState(inner, unlock) || doorState(middle, unlock) || doorState(outer, unlock) || doorState(inner, lock) || 
+        doorState(middle, lock) || doorState(outer, lock) || doorState(outer, noreply))]X(dO, dM, dI)
+)
+
+% R14. After a button is pressed, eventually another button can always be pressed.
+forall b1: Button. exists b2: Button.
+    [true*. buttonPressed(b1). !buttonPressed(b2)*]<true*.buttonPressed(b2)>true
+
+% R15. Once the outer door fails, the pressure in the main airlock should not be changed.
+forall p:Pressure.
+    [true*. doorState(outer, noreply). !setPressure(main, p)* .setPressure(main, p)]false
+
+% R16. The outer door can fail at any time.
+%[true*. doorFailChance(true). !doorState(outer, noreply)*]<true*. doorState(outer, noreply)>true
+[true*. doorFailChance(true). true*. (doorState(outer, unlock) || doorState(outer, lock))]false
+
+% Sanity checks
+% An important scenario in this system is the function of the backup airlock in an emergency. 
+% We modeled this additional requirement as a sanity check for the system: 
+
+% U1. If the outer door fails and there is a person present in the main airlock, eventually the middle door will be able to unlock.
+[!buttonPressed(bDashboard)*. doorState(outer, noreply)]<!buttonPressed(bDashboard)*. doorState(middle,unlock)>true

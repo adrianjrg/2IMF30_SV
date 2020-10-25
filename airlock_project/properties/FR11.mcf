@@ -1,0 +1,5 @@
+% R11. You can not press a button immediately following another button press (some processes must take place in between). 
+% forall b1, b2:Button.
+%     [true*.buttonPressed(b1)]<buttonPressed(b2)>false
+% attempt to make is go faster - TODO: why are they not equivalent?
+[true*.forall b1:Button.buttonPressed(b1).forall b2:Button. buttonPressed(b2)]false

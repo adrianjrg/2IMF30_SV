@@ -1,0 +1,4 @@
+% R7. While any person detector detects a person the dashboard will display an ’Air-lock in use’ status.
+forall a1, a2:Airlock.
+    [true*.personDetected(a1, true).!updateDashboard(inUse, true)*]<true*.updateDashboard(inUse, true)>true &&
+    [true*.personDetected(a1, false).(!personDetected(a1, true))*.personDetected(a2, false)]<true*.updateDashboard(inUse, false)>val(a1 != a2)
