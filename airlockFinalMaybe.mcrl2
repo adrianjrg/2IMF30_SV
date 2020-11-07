@@ -1,0 +1,399 @@
+% A Control System for a Space Station Airlock
+% System Validation - 2IMF30
+% Group 7
+% Tymek Feldman (1008617) - t.feldman@student.tue.nl
+% Nikola Felkaroski (1563262) - n.felkaroski@student.tue.nl
+% Adrian Guillot (0982460) - a.j.r.guillot@student.tue.nl
+% Niels Jansen (1005434) - n.jansen@student.tue.nl
+
+% Data types
+sort Door = struct outer | middle | inner;
+    DoorStatus = struct lock | unlock | noreply;
+    DashboardStatus = struct inUse | alarm | docked;
+    Airlock = struct main ?is_main | backup ?is_backup;
+    Button = struct bOuter | bMiddleMain | bMiddleBack | 
+                    bInnerBack | bInnerStation | bDashboard;
+
+    Pressure = struct unpressurized | pressurized;
+    ControllerMode = struct processing | ready;
+
+% External actions
+act setPressure: Airlock # Pressure;
+    doorState: Door # DoorStatus;
+    unlockDoor: Door;
+    tetherConnected: Bool;
+    spacecraftDocked: Bool;
+    personDetected: Airlock # Bool;
+    updateDashboard: DashboardStatus # Bool;
+    buttonPressed: Button;
+    doorFailChance: Bool;
+
+% Map each button to its corresponding door
+map buttonToDoor : Button -> Door;
+eqn buttonToDoor(bOuter) = outer;
+eqn buttonToDoor(bMiddleMain) = middle;
+eqn buttonToDoor(bMiddleBack) = middle;
+eqn buttonToDoor(bInnerBack) = inner;
+eqn buttonToDoor(bInnerStation) = inner;
+eqn buttonToDoor(bDashboard) = outer;
+
+% Internal actions used for communication between components
+act sendAirlockInUse, receiveAirlockInUse, internalAirlockInUse: Airlock # Bool; 
+    sendDoorState, receiveDoorState, internalDoorState: Door # DoorStatus;
+    sendRequestAccess, receiveRequestAccess, internalRequestAccess: Door;
+    sendEqualize, receiveEqualize, internalEqualize: Door # DoorStatus;
+    sendDockingStatus, receiveDockingStatus, internalDockingStatus: Bool;
+    sendRequestCompleted, receiveRequestCompleted, requestCompleted;
+    sendPressureEquilized, receivePressureEqualized, internalPressureEqualized: Door # Bool;
+    sendCheckDepressurizeConditions, receiveCheckDepressurizeConditions, checkDepressurizeConditions: Airlock;
+    sendConditionsSatisfied, receiveConditionsSatisfied, internalConditionsSatisfied: Airlock # Bool;
+    sendDoorChange, receiveDoorChange, internalDoorChange: Door # DoorStatus;
+    sendPressureChanged, receivePressureChanged, internalPressureChanged;
+    sendDoorACK, receiveDoorACK, internalDoorACK;
+
+%-------------------M A I N _ C O N T R O L L E R-------------------
+
+% mode - the controller has two primary modes: ready and processing
+
+% uM, uB -  whether a person was detected in main or backup airlock, respectively
+
+% a - whether 'alarm' status was sent to dashboard
+
+% d - whether 'docked' status was sent to dashboard
+
+% currentButton - the button that is currently being processed is stored
+
+% sent - whether a button request has already been sent
+
+
+proc MainController(uM:Bool, uB:Bool, a:Bool, d:Bool, mode:ControllerMode, currentButton:Button, sent:Bool)
+% If mode == ready, receive a button input
+= (mode == ready) -> 
+      sum b:Button. 
+      (b == bDashboard && d) -> buttonPressed(b).
+      MainController(mode = processing, currentButton = b, sent = true)
+      + (b != bDashboard) -> buttonPressed(b).
+      MainController(mode = processing, currentButton = b, sent = true)
+% Else if mode != ready, start processing button
+      <> ( (sent) -> 
+          sendRequestAccess(buttonToDoor(currentButton)).
+          MainController(sent = false)
+          
+          %+ sum b:Button. buttonPressed(b)|buttonIgnoredWarning(b). MainController()
+          + receiveRequestCompleted.
+          MainController(mode = ready) )
+% Receives communication from all other components
++ sum cond:Bool. 
+  receiveAirlockInUse(main, cond). 
+  updateDashboard(inUse, (uB || cond)). 
+  MainController(uM = cond)
+
++ sum cond:Bool. 
+  receiveAirlockInUse(backup, cond). 
+  updateDashboard(inUse, (uM || cond)). 
+  MainController(uB = cond)
+
++ receiveDoorState(outer, noreply). 
+  updateDashboard(alarm, true).
+  MainController(a = true) 
+
++ receiveDoorState(outer, lock). 
+  updateDashboard(alarm, false).
+  MainController(a = false)
+
++ receiveDoorState(outer, unlock). 
+  updateDashboard(alarm, false).
+  MainController(a = false)
+
++ sum cond:Bool. 
+  receiveDockingStatus(cond). 
+  updateDashboard(docked, cond). 
+  MainController(d = cond);
+
+%-------------------D O O R _ C O N T R O L L E R-------------------
+
+% out, mid and inn - represent the current door status of the outer door, middle
+% door and inner door, respectively.
+
+% doorFail - represents whether the outer door has failed and has the state noreply
+
+
+proc DoorController(out:DoorStatus, mid:DoorStatus, inn:DoorStatus, doorFail: Bool)
+% Request to equalize pressures when necessairy.
+= receiveRequestAccess(outer). 
+  (out == lock && mid == lock) -> 
+      (sendEqualize(outer, out).
+      DoorController())
+      <> sendRequestCompleted. 
+      DoorController()
+
++ receiveRequestAccess(middle). 
+  (out != unlock && mid == lock && inn == lock) -> 
+      sendEqualize(middle, out).
+      DoorController()
+      <> sendRequestCompleted. 
+      DoorController()
+
++ receiveRequestAccess(inner). 
+  (mid == lock && inn == lock) -> 
+      sendEqualize(inner, out).
+      DoorController()
+      <> sendRequestCompleted. 
+      DoorController()
+
+% Now that the pressures are equalize open the door.
++ receivePressureEqualized(inner, true). 
+  unlockDoor(inner). 
+  sendDoorACK. 
+  doorState(inner, unlock)|sendDoorChange(inner, unlock).
+  sendRequestCompleted.
+  DoorController(inn=unlock)
+
++ receivePressureEqualized(middle, true). 
+  unlockDoor(middle). 
+  sendDoorACK. 
+  doorState(middle, unlock)|sendDoorChange(middle, unlock).
+  sendRequestCompleted.
+  DoorController(mid=unlock)
+
++ receivePressureEqualized(outer, true). (
+      (!doorFail) -> 
+          unlockDoor(outer). 
+          sendDoorACK. 
+          doorState(outer, unlock)|sendDoorChange(outer, unlock).
+          sendRequestCompleted.
+          DoorController(out = unlock)
+        
+      + (doorFail) -> 
+            sendDoorACK. 
+            doorState(outer, noreply)|sendDoorChange(outer, noreply).
+            sendDoorState(outer, noreply).
+            sendRequestCompleted.
+            DoorController(out = noreply) )
+
+% Pressures couldn't be equalized, so you can't open the door.
++ sum d:Door. 
+  receivePressureEqualized(d, false).
+  sendDoorACK.
+  sendRequestCompleted.
+  DoorController()
+
+% A door was manually closed and now automatically locks.
++ (inn == unlock) -> 
+      doorState(inner, lock)|sendDoorChange(inner, lock).
+      DoorController(inn = lock)
+
++ (mid == unlock) -> 
+      doorState(middle, lock)|sendDoorChange(middle, lock).
+      DoorController(mid = lock)
+
++ (out == unlock) -> 
+      ( (!doorFail) -> 
+          doorState(outer, lock)|sendDoorChange(outer, lock). 
+          DoorController(out = lock)
+        
+      + (doorFail) -> 
+          doorState(outer, noreply)|sendDoorChange(outer, noreply).
+          sendDoorState(outer, noreply). 
+          DoorController(out = noreply) )
+
+% At some point the outer door fails.
++ (!doorFail) -> 
+      doorFailChance(true). 
+      DoorController(doorFail = true);
+
+%-------------------P R E S S U R E _ C O N T R O L L E R-------------------
+
+% pO, pM, pB - represent the current pressures of the outer environment, main airlock 
+% and backup airlock, respectively
+
+% dr - keep the current door that is being processed
+
+% dockingChanges - keep track if a docking change has occured (changes the outer pressure)
+
+% isDocked - whether a spacecraft is docked or not
+
+
+proc PressureController(pO:Pressure, pM:Pressure, pB:Pressure, dr:Door, dockingChanges:Bool, isDocked:Bool)
+= sum d:Door. (
+      % Equalize the pressure of the sides of a door, check-in with the safety controller when necessairy.
+      (receiveEqualize(d, lock) + receiveEqualize(d, unlock)). (
+          (d == outer && (pO == pM)) -> 
+              sendPressureEquilized(d, true). 
+              receiveDoorACK. 
+              PressureController(dr = d, dockingChanges = false)
+            
+          + (d == middle && (pM == pB)) -> 
+                sendPressureEquilized(d, true). 
+                receiveDoorACK. 
+                PressureController(dr = d, dockingChanges = false)
+            
+          + (d == inner && (pB == pressurized)) -> 
+                sendPressureEquilized(d, true).
+                receiveDoorACK. 
+                PressureController(dr = d, dockingChanges = false)
+            
+          + (d == inner && pB == unpressurized) -> 
+                setPressure(backup, pressurized). 
+                sendPressureEquilized(d, true). 
+                receiveDoorACK.  
+                PressureController(pB = pressurized, dr = d, dockingChanges = false)
+
+          + (d == outer && pO==pressurized && pM==unpressurized) -> 
+                setPressure(main, pressurized). 
+                sendPressureEquilized(d, true). 
+                receiveDoorACK. 
+                PressureController(pM = pressurized, dr = d, dockingChanges = false)
+            
+          + (d == outer && pO==unpressurized && pM==pressurized) -> 
+                sendCheckDepressurizeConditions(main). 
+                PressureController(pM = pressurized, dr = d, dockingChanges = false)
+            
+          + (d == middle && pM == unpressurized) -> 
+                setPressure(main, pressurized).
+                sendPressureEquilized(d, true). 
+                receiveDoorACK.
+                PressureController(pM = pressurized, dr = d, dockingChanges = false) )
+    
+      % Special cases when the outer door has failed.
+      + receiveEqualize(d, noreply). (
+          (d == middle && pM == unpressurized) -> 
+              sendCheckDepressurizeConditions(backup). 
+              PressureController(pB = unpressurized, dr = d, dockingChanges = false)
+
+          + (d == middle && pM == pressurized) -> 
+                sendPressureEquilized(d, true). 
+                receiveDoorACK.
+                PressureController(pB = unpressurized, dr = d, dockingChanges = false) 
+        
+          + (d == inner && pB == pressurized) -> 
+                sendPressureEquilized(d, true && !dockingChanges). 
+                receiveDoorACK.
+                PressureController(pB = pressurized, dr = d, dockingChanges = false)
+
+          + (d == inner && pB == unpressurized) -> 
+                setPressure(backup, pressurized). 
+                sendPressureEquilized(d, true && !dockingChanges). 
+                receiveDoorACK.
+                PressureController(pB = pressurized, dr = d, dockingChanges = false) ) )
+
+% The conditions to (de)pressurize are met, respond appropriately.
++ sum airL:Airlock. 
+  receiveConditionsSatisfied(airL, true). 
+  setPressure(airL, unpressurized). 
+  sendPressureChanged. 
+  sendPressureEquilized(dr, true && !dockingChanges). 
+  receiveDoorACK. (
+      (is_main(airL)) -> 
+          PressureController(pM = unpressurized)
+      + (is_backup(airL)) -> 
+            PressureController(pB = unpressurized))
+
+% The conditions to (de)pressurize are not met, respownd appropriately.
++ sum airL:Airlock. 
+  receiveConditionsSatisfied(airL, false). 
+  sendPressureChanged. 
+  sendPressureEquilized(dr, false). 
+  receiveDoorACK. 
+  PressureController()
++ (!isDocked) -> 
+      spacecraftDocked(true). 
+      sendDockingStatus(true). 
+      PressureController(pO = pressurized, dockingChanges = true, isDocked = true)
++ (isDocked) -> 
+      spacecraftDocked(false). 
+      sendDockingStatus(false). 
+      PressureController(pO = unpressurized, dockingChanges = true, isDocked = false);
+
+%-------------------S A F E T Y _ C O N T R O L L E R%-------------------
+
+% preMain and perBack - represents whether a person is present in the main and 
+% backup airlock, respectively
+
+% statOuter, statMidlle and statInner - represent the current door status of the 
+% outer door, middle door and inner door, respectively
+
+
+proc SafetyController(perMain:Bool, perBack:Bool, tether:Bool, statOuter, statMiddle, statInner : DoorStatus)
+% Read inputs from the person detectors (at least one door should be unlocked for a change of reading to be possible)
+= sum airL: Airlock. (
+    ( is_main(airL) ->
+        sum b:Bool.
+        (perMain != b && ( statOuter == unlock || statMiddle == unlock ) ) -> 
+            personDetected(airL, b).
+            sendAirlockInUse(main, b).
+            SafetyController(perMain = b) )
+    + ( is_backup(airL) ->
+          sum b:Bool.
+          (perBack != b && (statMiddle == unlock || statInner == unlock)) ->
+              personDetected(airL, b).
+              sendAirlockInUse(backup, b).
+              SafetyController(perBack = b) ) )
+
+% Reads the tether sensor (reports only the changes and possible only when the outer door is not unlocked and a person is present)
++ (perMain && statOuter != unlock) ->
+      (sum b:Bool.
+      (tether != b) ->
+          tetherConnected(b).
+          SafetyController(tether = b) )
+
+% Communication with the pressure controller that (de)pressurization conditions are (not) met.
++ receiveCheckDepressurizeConditions(main). 
+  sendConditionsSatisfied(main, tether || !perMain).
+  receivePressureChanged.
+  SafetyController()
+  
++ receiveCheckDepressurizeConditions(backup). 
+  sendConditionsSatisfied(backup, !perBack). 
+  receivePressureChanged. 
+  SafetyController()
+
+% Receive updates of the door statuses from the door controller.
++ sum d:DoorStatus. (
+      receiveDoorChange(outer, d). 
+      SafetyController(statOuter = d)
+    
+      + receiveDoorChange(middle, d). 
+        SafetyController(statMiddle = d)
+    
+      + receiveDoorChange(inner, d). 
+        SafetyController(statInner = d)
+);
+
+%------------------------------------------------------------
+    % hidden actions
+init hide( 
+    { internalAirlockInUse, internalDoorState, internalRequestAccess, 
+      internalEqualize, internalPressureEqualized, internalDoorChange,
+      checkDepressurizeConditions, internalConditionsSatisfied, 
+      internalDockingStatus, internalDoorACK, internalPressureChanged
+    },
+    % allowed actions
+    allow(
+    { internalAirlockInUse, internalDoorState, internalRequestAccess, 
+      internalEqualize, internalPressureEqualized, internalDoorChange,
+      checkDepressurizeConditions, internalConditionsSatisfied, internalDockingStatus,
+      setPressure, unlockDoor, tetherConnected, spacecraftDocked, personDetected,
+      updateDashboard, buttonPressed, requestCompleted, doorFailChance, 
+      internalPressureChanged, internalDoorACK, doorState|internalDoorChange},
+    % internal communication multiactions
+    comm(
+    { sendAirlockInUse | receiveAirlockInUse -> internalAirlockInUse,
+      sendDoorState | receiveDoorState -> internalDoorState,
+      sendDockingStatus | receiveDockingStatus -> internalDockingStatus,
+      sendRequestAccess | receiveRequestAccess -> internalRequestAccess,
+      sendEqualize | receiveEqualize -> internalEqualize,
+      sendPressureEquilized | receivePressureEqualized -> internalPressureEqualized,
+      sendCheckDepressurizeConditions | receiveCheckDepressurizeConditions -> checkDepressurizeConditions,
+      sendConditionsSatisfied | receiveConditionsSatisfied -> internalConditionsSatisfied,
+      sendRequestCompleted | receiveRequestCompleted -> requestCompleted,
+      sendDoorChange | receiveDoorChange -> internalDoorChange,
+      sendPressureChanged | receivePressureChanged -> internalPressureChanged,
+      sendDoorACK | receiveDoorACK -> internalDoorACK
+    },
+    % initial conditions
+    MainController(false, false, false, false, ready, bOuter, false) || 
+    DoorController(lock, lock, lock, false) || 
+    PressureController(unpressurized, pressurized, pressurized, inner, false, false) || 
+    SafetyController(false, false, false, lock, lock, lock)
+ ) ) );
